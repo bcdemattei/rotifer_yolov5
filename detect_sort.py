@@ -34,6 +34,7 @@ import os
 import platform
 import sys
 from pathlib import Path
+import pandas as pd
 
 from rando_sort import *
 
@@ -220,9 +221,9 @@ def run(
         csv_path = save_dir / "predictions.csv"
 
         # Create or append to the CSV file
-        def write_to_csv(image_name, prediction, confidence):
+        def write_to_csv(image_name, prediction, object_id, confidence):
             """Writes prediction data for an image to a CSV file, appending if the file exists."""
-            data = {"Image Name": image_name, "Prediction": prediction, "Confidence": confidence}
+            data = {"Image Name": image_name, "Prediction": prediction, "ObjectID": object_id, "Confidence": confidence}
             file_exists = os.path.isfile(csv_path)
             with open(csv_path, mode="a", newline="") as f:
                 writer = csv.DictWriter(f, fieldnames=data.keys())
@@ -255,20 +256,22 @@ def run(
                     n = (det[:, 5] == c).sum()  # detections per class
                     s += f"{n} {names[int(c)]}{'s' * (n > 1)}, "  # add to string
 
-                dets_to_sort = np.empty((0,6))
+                dets_to_sort = np.empty((0,7))
                 
                 # NOTE: We send in detected object class too
                 for x1,y1,x2,y2,conf,detclass in det.cpu().detach().numpy():
                     dets_to_sort = np.vstack((dets_to_sort, 
                                               np.array([x1, y1, x2, y2, 
-                                                        conf, detclass])))
+                                                        conf, detclass, frame])))
                  
                 # Run SORT
                 tracked_dets = mot_tracker.update(dets_to_sort)
+                track_frame = pd.DataFrame(tracked_dets)
+                track_frame.to_csv(f"{p.stem}.csv", mode='a', header=not os.path.exists(f"{p.stem}.csv"), index = False)
                 
-
+                
                 # Write results
-                for *xyxy, conf, cls, tracked_object in tracked_dets:
+                for *xyxy, conf, cls, frame, tracked_object in tracked_dets:
                     c = int(cls)  # integer class
                     label = names[c] if hide_conf else f"{names[c]}"
                     object_id = f"{tracked_object}"
@@ -331,6 +334,8 @@ def run(
         LOGGER.info(f"Results saved to {colorstr('bold', save_dir)}{s}")
     if update:
         strip_optimizer(weights[0])  # update model (to fix SourceChangeWarning)
+    
+    
 
 
 def parse_opt():
