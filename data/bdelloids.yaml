@@ -1,0 +1,7 @@
+path: /mnt/class_data/group2/bcdemattei/datasets/bdelloids
+train: training/images
+val: val/images
+
+names:
+    0: bdelloid
+    1: cryptomonas
