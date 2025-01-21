@@ -37,6 +37,7 @@ from pathlib import Path
 import pandas as pd
 
 from rando_sort import *
+from distance_measure import *
 
 import torch
 
@@ -267,8 +268,10 @@ def run(
                 # Run SORT
                 tracked_dets = mot_tracker.update(dets_to_sort)
                 track_frame = pd.DataFrame(tracked_dets)
+                track_frame.columns = ["x1", "y1", "x2", "y2", "conf", "cls", "frame", "tID"]
                 track_frame.to_csv(f"{p.stem}.csv", mode='a', header=not os.path.exists(f"{p.stem}.csv"), index = False)
-                
+
+
                 
                 # Write results
                 for *xyxy, conf, cls, frame, tracked_object in tracked_dets:
@@ -323,8 +326,13 @@ def run(
                         vid_writer[i] = cv2.VideoWriter(save_path, cv2.VideoWriter_fourcc(*"mp4v"), fps, (w, h))
                     vid_writer[i].write(im0)
 
+
         # Print time (inference-only)
         LOGGER.info(f"{s}{'' if len(det) else '(no detections), '}{dt[1].dt * 1e3:.1f}ms")
+
+    p = Path(source)
+    tracked_df = pd.read_csv(f"{p.stem}.csv")
+    calculate_distances(tracked_df, source, 1920)
 
     # Print results
     t = tuple(x.t / seen * 1e3 for x in dt)  # speeds per image
