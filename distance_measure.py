@@ -14,15 +14,18 @@ def calculate_distances(df, source, video_size):
 
     # Separate class 0 and class 1 objects
     class_0 = df[df['cls'] == 0]
+    
     class_1 = df[df['cls'] == 1]
+    
 
     # Prepare a dictionary to store distances
     distance_dict = {}
 
     # Get all unique frames
     all_frames = sorted(df['frame'].unique())
+    
 
-    # Iterate through each class 1 object and calculate distances
+    #Iterate through each class 1 object and calculate distances
     for obj_id, obj_data in class_1.groupby('tID'):
         distances = []
         for frame in all_frames:
