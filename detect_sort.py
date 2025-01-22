@@ -32,6 +32,7 @@ import argparse
 import csv
 import os
 import platform
+import csv
 import sys
 from pathlib import Path
 import pandas as pd
@@ -185,6 +186,12 @@ def run(
         dataset = LoadImages(source, img_size=imgsz, stride=stride, auto=pt, vid_stride=vid_stride)
     vid_path, vid_writer = [None] * bs, [None] * bs
 
+#      # Define a list to store the frame ranges with tIDs
+#     frame_ranges = []
+
+# # Track the bounding boxes for a pair of objects across frames
+#     tracked_pairs = {} 
+
     # Run inference
     model.warmup(imgsz=(1 if pt or model.triton else bs, 3, *imgsz))  # warmup
     seen, windows, dt = 0, [], (Profile(device=device), Profile(device=device), Profile(device=device))
@@ -231,6 +238,8 @@ def run(
                 if not file_exists:
                     writer.writeheader()
                 writer.writerow(data)
+
+       
 
         # Process predictions
         for i, det in enumerate(pred):  # per image
@@ -282,6 +291,8 @@ def run(
 
                     if cls == 1:
                         tracked_dets[j][7] = calc_dist[frame][tracked_object]
+                    
+                
                 
                 # Write results
                 for *xyxy, conf, cls, frame, nDist, tracked_object in tracked_dets:
@@ -292,6 +303,54 @@ def run(
                     confidence_str = f"{confidence:.2f}"
                     nDist = float(nDist)
                     nDist_str = f"{'%.3f'%(nDist)}"
+
+                    if nDist < 0.1 and cls == 1:
+        # Find the object of class 0 that is being measured from
+                        for *xyxy_other, conf_other, cls_other, frame_other, nDist_other, tracked_object_other in tracked_dets:
+                            if cls_other == 0 and tracked_object != tracked_object_other:
+                                # Assuming xyxy are bounding box coordinates in [x1, y1, x2, y2]
+                                x1, y1, x2, y2 = map(float, xyxy)
+                                x1_other, y1_other, x2_other, y2_other = map(float, xyxy_other)
+
+                                # Calculate new bounding box that encompasses both class 1 and class 0
+                                new_x1 = min(x1, x1_other)
+                                new_y1 = min(y1, y1_other)
+                                new_x2 = max(x2, x2_other)
+                                new_y2 = max(y2, y2_other)
+
+                                # Add padding to make the box slightly bigger
+                                padding = 0.05  # 5% padding around the bounding box
+                                width = new_x2 - new_x1
+                                height = new_y2 - new_y1
+                                new_x1 -= padding * width
+                                new_y1 -= padding * height
+                                new_x2 += padding * width
+                                new_y2 += padding * height
+
+                                # Ensure the box doesn't go out of image bounds (clamp to image size)
+                                new_x1 = max(0, new_x1)
+                                new_y1 = max(0, new_y1)
+                                new_x2 = min(im0.shape[1], new_x2)
+                                new_y2 = min(im0.shape[0], new_y2)
+
+                                # Draw the new bounding box around both objects (in red)
+                                new_xyxy = [new_x1, new_y1, new_x2, new_y2]
+                                new_label =  "Encounter!"
+                                red_color = (0, 0, 255)  # Red color in BGR
+                                annotator.box_label(new_xyxy, new_label, color=red_color)
+
+                                #  # Track the frame range and object IDs for the new bounding box
+                                # pair_id = (tracked_object, tracked_object_other)  # Tuple of object IDs
+                                # if pair_id not in tracked_pairs:
+                                #     # First frame this pair appears
+                                #     tracked_pairs[pair_id] = {'first_frame': frame, 'last_frame': frame, 'tID1': tracked_object, 'tID2': tracked_object_other}
+                                # else:
+                                #     # Update the last frame this pair appears
+                                #     tracked_pairs[pair_id]['last_frame'] = frame
+
+                                # # Break after drawing the box as we've already processed the relevant objects
+                                # break
+
 
                     if save_csv:
                         write_to_csv(p.name, label, object_id, confidence_str)
@@ -308,6 +367,23 @@ def run(
 
                     if save_crop:
                         save_one_box(xyxy, imc, file=save_dir / "crops" / names[c] / f"{p.stem}.jpg", BGR=True)
+
+                        # Save the frame ranges for object pairs to a CSV file
+                # if frame_ranges:
+                #     with open('frame_ranges.csv', 'w', newline='') as csvfile:
+                #         fieldnames = ['first_frame', 'last_frame', 'tID1', 'tID2']
+                #         writer = csv.DictWriter(csvfile, fieldnames=fieldnames)
+                #         writer.writeheader()
+
+                #         for pair_id, data in tracked_pairs.items():
+                #             writer.writerow({
+                #                 'first_frame': data['first_frame'],
+                #                 'last_frame': data['last_frame'],
+                #                 'tID1': data['tID1'],
+                #                 'tID2': data['tID2']
+                #             })
+                # else:
+                #     print("Too bad!")
 
             # Stream results
             im0 = annotator.result()
@@ -353,9 +429,9 @@ def run(
     if update:
         strip_optimizer(weights[0])  # update model (to fix SourceChangeWarning)
     
-    p = Path(source)
-    tracked_df = pd.read_csv(f"{p.stem}.csv")
-    calculate_distances(tracked_df, source, 1920, save_csv = True)
+    # p = Path(source)
+    # tracked_df = pd.read_csv(f"{p.stem}.csv")
+    # calculate_distances(tracked_df, source, 1920, save_csv = True)
     
     
 
