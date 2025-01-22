@@ -257,29 +257,41 @@ def run(
                     n = (det[:, 5] == c).sum()  # detections per class
                     s += f"{n} {names[int(c)]}{'s' * (n > 1)}, "  # add to string
 
-                dets_to_sort = np.empty((0,7))
+                dets_to_sort = np.empty((0,8))
+                nDist = 0
                 
                 # NOTE: We send in detected object class too
                 for x1,y1,x2,y2,conf,detclass in det.cpu().detach().numpy():
                     dets_to_sort = np.vstack((dets_to_sort, 
                                               np.array([x1, y1, x2, y2, 
-                                                        conf, detclass, frame])))
+                                                        conf, detclass, frame, nDist])))
                  
                 # Run SORT
                 tracked_dets = mot_tracker.update(dets_to_sort)
                 track_frame = pd.DataFrame(tracked_dets)
-                track_frame.columns = ["x1", "y1", "x2", "y2", "conf", "cls", "frame", "tID"]
+                track_frame.columns = ["x1", "y1", "x2", "y2", "conf", "cls", "frame", "nDist", "tID"]
                 track_frame.to_csv(f"{p.stem}.csv", mode='a', header=not os.path.exists(f"{p.stem}.csv"), index = False)
 
+                calc_dist = calculate_distances(track_frame, source, 1920)  
 
+            
+                for j in range(len(tracked_dets)):
+                    cls = tracked_dets[j][5]
+                    frame = tracked_dets[j][6]
+                    tracked_object = tracked_dets[j][8]
+
+                    if cls == 1:
+                        tracked_dets[j][7] = calc_dist[frame][tracked_object]
                 
                 # Write results
-                for *xyxy, conf, cls, frame, tracked_object in tracked_dets:
+                for *xyxy, conf, cls, frame, nDist, tracked_object in tracked_dets:
                     c = int(cls)  # integer class
                     label = names[c] if hide_conf else f"{names[c]}"
                     object_id = f"{tracked_object}"
                     confidence = float(conf)
                     confidence_str = f"{confidence:.2f}"
+                    nDist = float(nDist)
+                    nDist_str = f"{'%.3f'%(nDist)}"
 
                     if save_csv:
                         write_to_csv(p.name, label, object_id, confidence_str)
@@ -291,7 +303,7 @@ def run(
                             f.write((' '.join(map(str, line)) + '\n'))
 
                     if save_img or view_img:  # Add bbox to image
-                        label = None if hide_labels else (names[int(cls)] if hide_conf else f'{names[int(cls)]} {conf:.2f} {object_id}')
+                        label = None if hide_labels else (names[int(cls)] if hide_conf else f'{object_id} {names[int(cls)]} {conf:.2f} nDistance: {nDist_str}')
                         annotator.box_label(xyxy, label, color=colors(int(cls), True))
 
                     if save_crop:
@@ -330,9 +342,7 @@ def run(
         # Print time (inference-only)
         LOGGER.info(f"{s}{'' if len(det) else '(no detections), '}{dt[1].dt * 1e3:.1f}ms")
 
-    p = Path(source)
-    tracked_df = pd.read_csv(f"{p.stem}.csv")
-    calculate_distances(tracked_df, source, 1920)
+    
 
     # Print results
     t = tuple(x.t / seen * 1e3 for x in dt)  # speeds per image
@@ -342,6 +352,10 @@ def run(
         LOGGER.info(f"Results saved to {colorstr('bold', save_dir)}{s}")
     if update:
         strip_optimizer(weights[0])  # update model (to fix SourceChangeWarning)
+    
+    p = Path(source)
+    tracked_df = pd.read_csv(f"{p.stem}.csv")
+    calculate_distances(tracked_df, source, 1920, save_csv = True)
     
     
 

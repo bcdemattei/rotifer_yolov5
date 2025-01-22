@@ -3,7 +3,7 @@ from pathlib import Path
 import numpy as np
 
 # Function to calculate distances and handle missing tracked_object_ids
-def calculate_distances(df, source, video_size):
+def calculate_distances(df, source, video_size, save_csv = False):
     p = Path(source)
 
     video_diagonal = np.sqrt(video_size**2 + video_size**2)
@@ -49,9 +49,11 @@ def calculate_distances(df, source, video_size):
     output_df = pd.DataFrame(distance_dict, index=all_frames)
     output_df.index.name = 'frame'
     output_df = output_df.transpose()  # Rows as objects, columns as frames
+    return output_df
 
     # Save to CSV
-    output_df.to_csv(f'{p.stem}_distances.csv')
+    if save_csv:
+        output_df.to_csv(f'{p.stem}_distances.csv')
 
 # Example usage
 # Replace this with your DataFrame loading code
