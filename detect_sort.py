@@ -186,16 +186,18 @@ def run(
         dataset = LoadImages(source, img_size=imgsz, stride=stride, auto=pt, vid_stride=vid_stride)
     vid_path, vid_writer = [None] * bs, [None] * bs
 
-#      # Define a list to store the frame ranges with tIDs
-#     frame_ranges = []
-
-# # Track the bounding boxes for a pair of objects across frames
-#     tracked_pairs = {} 
-
     # Run inference
     model.warmup(imgsz=(1 if pt or model.triton else bs, 3, *imgsz))  # warmup
     seen, windows, dt = 0, [], (Profile(device=device), Profile(device=device), Profile(device=device))
+
+      # Define a list to store the frame ranges with tIDs
+    frame_ranges = []
+    tracked_pairs = {} 
+    p = Path(source)
+
+                 
     for path, im, im0s, vid_cap, s in dataset:
+        # Track the bounding boxes for a pair of objects across frames
         with dt[0]:
             im = torch.from_numpy(im).to(model.device)
             im = im.half() if model.fp16 else im.float()  # uint8 to fp16/32
@@ -239,8 +241,6 @@ def run(
                     writer.writeheader()
                 writer.writerow(data)
 
-       
-
         # Process predictions
         for i, det in enumerate(pred):  # per image
             seen += 1
@@ -257,6 +257,7 @@ def run(
             gn = torch.tensor(im0.shape)[[1, 0, 1, 0]]  # normalization gain whwh
             imc = im0.copy() if save_crop else im0  # for save_crop
             annotator = Annotator(im0, line_width=line_thickness, example=str(names))
+            
             if len(det):
                 # Rescale boxes from img_size to im0 size
                 det[:, :4] = scale_boxes(im.shape[2:], det[:, :4], im0.shape).round()
@@ -339,17 +340,15 @@ def run(
                                 red_color = (0, 0, 255)  # Red color in BGR
                                 annotator.box_label(new_xyxy, new_label, color=red_color)
 
-                                #  # Track the frame range and object IDs for the new bounding box
-                                # pair_id = (tracked_object, tracked_object_other)  # Tuple of object IDs
-                                # if pair_id not in tracked_pairs:
-                                #     # First frame this pair appears
-                                #     tracked_pairs[pair_id] = {'first_frame': frame, 'last_frame': frame, 'tID1': tracked_object, 'tID2': tracked_object_other}
-                                # else:
-                                #     # Update the last frame this pair appears
-                                #     tracked_pairs[pair_id]['last_frame'] = frame
+                                 # Track the frame range and object IDs for the new bounding box
+                                pair_id = (min(tracked_object, tracked_object_other), max(tracked_object, tracked_object_other))
+                                if pair_id not in tracked_pairs:
+                                    tracked_pairs[pair_id] = {"first_frame": frame, "last_frame": frame}
+                                else:
+                                    tracked_pairs[pair_id]["last_frame"] = frame
 
-                                # # Break after drawing the box as we've already processed the relevant objects
-                                # break
+                                # Break after drawing the box as we've already processed the relevant objects
+                                break
 
 
                     if save_csv:
@@ -369,21 +368,6 @@ def run(
                         save_one_box(xyxy, imc, file=save_dir / "crops" / names[c] / f"{p.stem}.jpg", BGR=True)
 
                         # Save the frame ranges for object pairs to a CSV file
-                # if frame_ranges:
-                #     with open('frame_ranges.csv', 'w', newline='') as csvfile:
-                #         fieldnames = ['first_frame', 'last_frame', 'tID1', 'tID2']
-                #         writer = csv.DictWriter(csvfile, fieldnames=fieldnames)
-                #         writer.writeheader()
-
-                #         for pair_id, data in tracked_pairs.items():
-                #             writer.writerow({
-                #                 'first_frame': data['first_frame'],
-                #                 'last_frame': data['last_frame'],
-                #                 'tID1': data['tID1'],
-                #                 'tID2': data['tID2']
-                #             })
-                # else:
-                #     print("Too bad!")
 
             # Stream results
             im0 = annotator.result()
@@ -417,6 +401,30 @@ def run(
 
         # Print time (inference-only)
         LOGGER.info(f"{s}{'' if len(det) else '(no detections), '}{dt[1].dt * 1e3:.1f}ms")
+
+    # Write frame ranges to CSV
+    for pair_id, data in tracked_pairs.items():
+        frame_ranges.append({
+            "first_frame": data["first_frame"],
+            "last_frame": data["last_frame"],
+            "first_time": data["first_frame"]/25,
+            "last_time": data["last_frame"]/25,
+            "tID1": pair_id[0],
+            "tID2": pair_id[1],
+    })
+
+    if frame_ranges:
+        try:
+            with open(f'{p.stem}_frame_ranges.csv', 'w', newline='') as csvfile:
+                fieldnames = ['first_frame', 'last_frame', 'first_time', 'last_time', 'tID1', 'tID2']
+                writer = csv.DictWriter(csvfile, fieldnames=fieldnames)
+                writer.writeheader()
+                writer.writerows(frame_ranges)
+            print("CSV file created successfully!")
+        except Exception as e:
+            print(f"Error writing to CSV: {e}")
+    else:
+        print("No encounters detected.")
 
     
 
