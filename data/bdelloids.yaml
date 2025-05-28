@@ -3,5 +3,5 @@ train: training/images
 val: val/images
 
 names:
-    0: bdelloid
+    0: philodina
     1: cryptomonas
