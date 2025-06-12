@@ -102,6 +102,8 @@ def run(
     half=False,  # use FP16 half-precision inference
     dnn=False,  # use OpenCV DNN for ONNX inference
     vid_stride=1,  # video frame-rate stride
+    volume_arena = 0.00482, # volume of the viewing plane aka the viewing arena. in mm3
+    volume_total = 1000, #total volume of sample. in mm3
 ):
     """
     Runs YOLOv5 detection inference on various sources like images, videos, directories, streams, etc.
@@ -195,8 +197,10 @@ def run(
     tracked_pairs = {} 
     p = Path(source)
 
+    class_1_counts = []
                  
     for path, im, im0s, vid_cap, s in dataset:
+        total_frames = int(vid_cap.get(cv2.CAP_PROP_FRAME_COUNT)) if vid_cap is not None else 0
         # Track the bounding boxes for a pair of objects across frames
         with dt[0]:
             im = torch.from_numpy(im).to(model.device)
@@ -262,6 +266,14 @@ def run(
                 # Rescale boxes from img_size to im0 size
                 det[:, :4] = scale_boxes(im.shape[2:], det[:, :4], im0.shape).round()
 
+
+                if len(det):
+                    num_class_1 = (det[:, 5] == 1).sum()
+                else:
+                    num_class_1 = 0
+                class_1_counts.append(num_class_1)
+                print(f"class_1_counts so far: {sum(class_1_counts)}")
+                
                 # Print results
                 for c in det[:, 5].unique():
                     n = (det[:, 5] == c).sum()  # detections per class
@@ -431,6 +443,14 @@ def run(
     # Print results
     t = tuple(x.t / seen * 1e3 for x in dt)  # speeds per image
     LOGGER.info(f"Speed: %.1fms pre-process, %.1fms inference, %.1fms NMS per image at shape {(1, 3, *imgsz)}" % t)
+    if total_frames > 0:
+        total_class_1 = sum(class_1_counts)
+        average_class_1 = total_class_1 / total_frames
+        algal_density = average_class_1 / volume_arena
+        est_algal_abundance = algal_density * volume_total
+        LOGGER.info(f"Total: {total_class_1}, Average algal cells per frame: {average_class_1:.2f}, Estimated algal density: {algal_density:.2f}, Estimated algal abundance: {est_algal_abundance:.2f}")
+    else:
+        LOGGER.info("Video frame count unavailable; skipping class 1 summary.")
     if save_txt or save_img:
         s = f"\n{len(list(save_dir.glob('labels/*.txt')))} labels saved to {save_dir / 'labels'}" if save_txt else ""
         LOGGER.info(f"Results saved to {colorstr('bold', save_dir)}{s}")
