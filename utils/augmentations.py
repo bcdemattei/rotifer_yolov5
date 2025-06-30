@@ -20,7 +20,7 @@ IMAGENET_STD = 0.229, 0.224, 0.225  # RGB standard deviation
 class Albumentations:
     """Provides optional data augmentation for YOLOv5 using Albumentations library if installed."""
 
-    def __init__(self, size=640):
+    def __init__(self, size=1920):
         """Initializes Albumentations class for optional data augmentation in YOLOv5 with specified input size."""
         self.transform = None
         prefix = colorstr("albumentations: ")
@@ -30,14 +30,14 @@ class Albumentations:
             check_version(A.__version__, "1.0.3", hard=True)  # version requirement
 
             T = [
-                A.RandomResizedCrop(height=size, width=size, scale=(0.8, 1.0), ratio=(0.9, 1.11), p=0.0),
+                #A.RandomResizedCrop(height=size, width=size, scale=(0.8, 1.0), ratio=(0.9, 1.11), p=0.1),
                 A.Blur(p=0.01),
                 A.MedianBlur(p=0.01),
                 A.ToGray(p=0.01),
                 A.CLAHE(p=0.01),
-                A.RandomBrightnessContrast(p=0.0),
+                A.RandomBrightnessContrast(p=0.1),
                 A.RandomGamma(p=0.0),
-                A.ImageCompression(quality_lower=75, p=0.0),
+                A.ImageCompression(quality_lower=75, p=0.1),
             ]  # transforms
             self.transform = A.Compose(T, bbox_params=A.BboxParams(format="yolo", label_fields=["class_labels"]))
 

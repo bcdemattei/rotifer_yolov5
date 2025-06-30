@@ -543,7 +543,7 @@ class LoadImagesAndLabels(Dataset):
     def __init__(
         self,
         path,
-        img_size=640,
+        img_size=1920,
         batch_size=16,
         augment=False,
         hyp=None,
