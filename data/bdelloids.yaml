@@ -1,6 +1,7 @@
 path: /mnt/class_data/group2/bcdemattei/datasets/bdelloids
 train: training/images
 val: val/images
+test: test/images
 
 names:
     0: philodina
