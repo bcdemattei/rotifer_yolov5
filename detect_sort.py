@@ -272,7 +272,7 @@ def run(
                 else:
                     num_class_1 = 0
                 class_1_counts.append(num_class_1)
-                print(f"class_1_counts so far: {sum(class_1_counts)}")
+                #print(f"class_1_counts so far: {sum(class_1_counts)}")
                 
                 # Print results
                 for c in det[:, 5].unique():
