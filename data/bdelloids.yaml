@@ -1,4 +1,4 @@
-path: /mnt/class_data/group2/bcdemattei/datasets/bdelloids
+path: /Users/bradendemattei/Desktop/'PrED model'/bdelloids
 train: training/images
 val: val/images
 test: test/images
